@@ -4,6 +4,8 @@ import math
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
+comm.Barrier()
+start_time = MPI.Wtime()
 
 N = 10**9
 
@@ -83,7 +85,12 @@ if rank == 0:
             gap = first_p - last_p
             if gap > global_gap:
                 global_gap = gap
-                best_pair = (last_p, first_p)
+                best_pair = (last_p, first_p)     
+    end_time = MPI.Wtime()
+    elapsed = end_time - start_time
 
+    print()
+    print("Processes", size)
+    print("Wall time (s):", elapsed)
     print("Largest prime gap up to 1e9:", global_gap)
     print("Primes:", best_pair)
