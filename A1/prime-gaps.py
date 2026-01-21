@@ -1,67 +1,89 @@
-import math
 from mpi4py import MPI
-
-# determine if a number is prime
-def is_prime(n):     
-     if n < 2: return False
-     
-     upper_bound = math.floor(math.sqrt(n)) + 1 # account for "range" 
-     for i in range(2, upper_bound):
-          if n % i == 0:
-               return False
-     return True
-
-# find prime numbers up to 'n'
-def find_primes(n):
-     primes = []
-     for i in range(1,n+1):
-          if is_prime(i): primes.append(i)
-     return primes
-
-def compute_max_gap(primes):     
-     n = len(primes)
-     
-     # keep track of a max gap variable
-     max_gap = 0
-     a, b = None, None
-     
-     # iterate through prime numbers
-     for i, curr in enumerate(primes):
-          if i + 1 < n:
-               next_ = primes[i+1]
-               if next_ - curr > max_gap:
-                    max_gap = next_ - curr
-                    a, b = curr, next_
-     
-     return max_gap, a, b
+import math
 
 comm = MPI.COMM_WORLD
-
 rank = comm.Get_rank()
-P = comm.Get_size()
+size = comm.Get_size()
 
-W = P-1
-n = 1000000000
-primes = find_primes(n)
+N = 10**9
 
-if rank != 0:
-     dest = 0
-     w_id = rank-1
-     #n_p = math.floor(n/W) + 1 if w_id < n%W else 0
-     n_p = math.floor(n/W)
-     if w_id < n%W:
-          n_p + 1
-     i_start_p = (w_id*(math.floor(n/W))) + min(w_id, n%W)
-     gap, a, b = compute_max_gap(primes[i_start_p:i_start_p+n_p])
-     message = (gap, a, b)
-     comm.send(message, dest)
+# Step 1: Rank 0 computes primes up to sqrt(N)
+def simple_sieve(limit):
+    sieve = [True] * (limit + 1)
+    sieve[0:2] = [False, False]
+    for i in range(2, int(math.sqrt(limit)) + 1):
+        if sieve[i]:
+            for j in range(i*i, limit + 1, i):
+                sieve[j] = False
+    return [i for i, is_p in enumerate(sieve) if is_p]
+
+if rank == 0:
+    base_primes = simple_sieve(int(math.sqrt(N)))
 else:
-     max_gap = 0
-     max_a, max_b = None, None
-     for i in range(1, P):
-          message = comm.recv(source=i)
-          gap, a, b = message
-          if gap > max_gap:
-               max_gap = gap
-               max_a, max_b = a, b
-     print(f"Max gap of prime numbers up to {n} is {max_gap} between {max_a} and {max_b}")
+    base_primes = None
+
+base_primes = comm.bcast(base_primes, root=0)
+
+# Step 2: Divide range
+chunk = N // size
+low = rank * chunk
+high = N if rank == size - 1 else low + chunk
+if low < 2:
+    low = 2
+
+segment_size = high - low
+is_prime = [True] * segment_size
+
+# Step 3: Segmented sieve
+for p in base_primes:
+    start = max(p*p, ((low + p - 1) // p) * p)
+    for j in range(start, high, p):
+        is_prime[j - low] = False
+
+# Step 4: Find local prime gaps
+prev = None
+local_max_gap = 0
+local_pair = (None, None)
+first_prime = None
+last_prime = None
+
+for i in range(segment_size):
+    if is_prime[i]:
+        curr = low + i
+        if prev is not None:
+            gap = curr - prev
+            if gap > local_max_gap:
+                local_max_gap = gap
+                local_pair = (prev, curr)
+        else:
+            first_prime = curr
+        prev = curr
+
+last_prime = prev
+
+local_data = (local_max_gap, local_pair, first_prime, last_prime)
+all_data = comm.gather(local_data, root=0)
+
+# Step 5: Global reduction
+if rank == 0:
+    global_gap = 0
+    best_pair = None
+
+    # Local gaps
+    for gap, pair, _, _ in all_data:
+        if gap > global_gap:
+            global_gap = gap
+            best_pair = pair
+
+    # Boundary gaps
+    for i in range(len(all_data) - 1):
+        last_p = all_data[i][3]
+        first_p = all_data[i + 1][2]
+        if last_p and first_p:
+            gap = first_p - last_p
+            if gap > global_gap:
+                global_gap = gap
+                best_pair = (last_p, first_p)
+
+    print("Largest prime gap up to 1e9:", global_gap)
+    print("Primes:", best_pair)
