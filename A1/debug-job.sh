@@ -10,4 +10,4 @@
 cd $SLURM_SUBMIT_DIR/A1
 module restore ASSIGNMENT_1_MODULES
 
-mpirun -np 80 ./prime-gaps.py
+mpirun -np 80 python3 ./prime-gaps.py
