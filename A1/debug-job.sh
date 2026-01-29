@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=2
-#SBATCH --cpus-per-task=40
+#SBATCH --ntasks-per-node=40
 #SBATCH --time=00:15:00
 #SBATCH --job-name debug-job
 #SBATCH --output=debug-job-out%j.txt
