@@ -48,7 +48,7 @@ def receive_segments_from_ranks(comm, sendbuf, counts, displacements, root=0, ta
         # place root's own chunk
         s = int(displacements[root])
         e = s + int(counts[root])
-        recvbuf[s:e] - sendbuf
+        recvbuf[s:e] = sendbuf
         
         # receive others and place
         for srce in range(size):
@@ -152,6 +152,9 @@ def parallel_merge_algorithm(exp):
     
     if rank == FIRST:
         A, B = generate_sorted_arrays(n)
+        print("Generated A and B:")
+        print("A --> ", A)
+        print("B --> ", B)
         
         # keys are the last eleemnts of each A group: A[k-1], A[2k-1], ..., A[rk-1]
         keys = A[k-1::k] # length r
