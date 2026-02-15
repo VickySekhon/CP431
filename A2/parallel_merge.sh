@@ -7,7 +7,7 @@
 #SBATCH --mail-user=sekh4498@mylaurier.ca # Email me at this address if my job fails
 #SBATCH --mail-type=FAIL
 
-cd $SLURM_SUBMIT_DIR/A1/output
+cd $SLURM_SUBMIT_DIR/A2/output
 module restore ASSIGNMENT_2_MODULES
 
 mpirun -np 80 python3 ./parallel_merge_v3.py 40
