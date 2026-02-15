@@ -29,9 +29,9 @@ def send_segments_to_ranks(comm, sendbuf, counts, displacements, recvbuf, root=0
                 continue
             s = int(displacements[dest])
             e = s + int(counts[dest])
-            comm.Send([sendbuf[s:e], MPI.INT], dest=dest, tag=tag)
+            comm.Send([sendbuf[s:e], MPI.LONG], dest=dest, tag=tag)
     else:
-        comm.Recv([recvbuf, MPI.INT], source=root, tag=tag)
+        comm.Recv([recvbuf, MPI.LONG], source=root, tag=tag)
         
 def receive_segments_from_ranks(comm, sendbuf, counts, displacements, root=0, tag=0):
     rank = comm.Get_rank()
@@ -43,7 +43,7 @@ def receive_segments_from_ranks(comm, sendbuf, counts, displacements, root=0, ta
     
     if rank == root:
         total = int(np.sum(counts))
-        recvbuf = np.empty(total, dtype=np.int32)
+        recvbuf = np.empty(total, dtype=np.int64)
         
         # place root's own chunk
         s = int(displacements[root])
@@ -55,23 +55,23 @@ def receive_segments_from_ranks(comm, sendbuf, counts, displacements, root=0, ta
             if srce == root:
                 continue
             count = int(counts[srce])
-            tmp = np.empty(count, dtype=np.int32)
-            comm.Recv([tmp, MPI.INT], source=srce, tag=tag)
+            tmp = np.empty(count, dtype=np.int64)
+            comm.Recv([tmp, MPI.LONG], source=srce, tag=tag)
             s = int(displacements[srce])
             recvbuf[s:s+count] = tmp
         return recvbuf
     else:
-        comm.Send([sendbuf, MPI.INT], dest=root, tag=tag)
+        comm.Send([sendbuf, MPI.LONG], dest=root, tag=tag)
         return None
 
 def generate_sorted_arrays(n, step = RANDOM_STEP_SIZE):
     # generate A and B sorted arrays of size n
     rnge = np.random.default_rng(int(time.time()))
-    A = np.empty(n, dtype=np.int32)
-    B = np.empty(n, dtype=np.int32)
+    A = np.empty(n, dtype=np.int64)
+    B = np.empty(n, dtype=np.int64)
     
-    A[0] = rnge.integers(0, step, dtype=np.int32)
-    B[0] = rnge.integers(0, step, dtype=np.int32)
+    A[0] = rnge.integers(0, step, dtype=np.int64)
+    B[0] = rnge.integers(0, step, dtype=np.int64)
     
     for i in range(1, n):
         max_increments_A = max(1, i * step - int(A[i-1]))
@@ -130,25 +130,25 @@ def parallel_merge_algorithm(exp):
     # group to rank mapping --> distribute the groups across ranks where extra groups go to higher ranks
     base = r // P
     rem = r % P
-    groups_per_rank = np.full(P, base, dtype=np.int32)
+    groups_per_rank = np.full(P, base, dtype=np.int64)
     if rem > 0:
         groups_per_rank[P - rem:] +=1 
         
-    group_displacements = np.zeros(P, dtype=np.int32)
+    group_displacements = np.zeros(P, dtype=np.int64)
     if P > 1:
-        group_displacements[1:] = np.cumsum(groups_per_rank[:-1], dtype=np.int32)
+        group_displacements[1:] = np.cumsum(groups_per_rank[:-1], dtype=np.int64)
     
     
     # rank-level A counts and displacements
-    a_counts = (groups_per_rank * k).astype(np.int32)
-    a_displacements = (group_displacements * k).astype(np.int32)
+    a_counts = (groups_per_rank * k).astype(np.int64)
+    a_displacements = (group_displacements * k).astype(np.int64)
     
     # rank-level B counts and displacements
-    b_counts = np.empty(P, dtype=np.int32)
-    b_displacements = np.empty(P, dtype=np.int32)
+    b_counts = np.empty(P, dtype=np.int64)
+    b_displacements = np.empty(P, dtype=np.int64)
     
     # broadcast group-level B boundaries so each rank can merge in groups
-    end_exclusive = np.empty(r, dtype=np.int32)
+    end_exclusive = np.empty(r, dtype=np.int64)
     
     if rank == FIRST:
         A, B = generate_sorted_arrays(n)
@@ -160,12 +160,12 @@ def parallel_merge_algorithm(exp):
         keys = A[k-1::k] # length r
         
         # B < key => end_exclusive = lower_bound(B, key)
-        end_exclusive = np.searchsorted(B, keys, side='left').astype(np.int32)
+        end_exclusive = np.searchsorted(B, keys, side='left').astype(np.int64)
         
         # last group will take the remainder of B
         end_exclusive[-1] = n
         
-        start_exclusive = np.empty(r, dtype=np.int32)
+        start_exclusive = np.empty(r, dtype=np.int64)
         start_exclusive[0] = 0
         start_exclusive[1:] = end_exclusive[:-1]
         
@@ -199,8 +199,8 @@ def parallel_merge_algorithm(exp):
     comm.Bcast(end_exclusive, root=FIRST)
     
     # local buffers
-    local_A = np.empty(int(a_counts[rank]), dtype=np.int32)
-    local_B = np.empty(int(b_counts[rank]), dtype=np.int32)
+    local_A = np.empty(int(a_counts[rank]), dtype=np.int64)
+    local_B = np.empty(int(b_counts[rank]), dtype=np.int64)
     
     comm.Barrier()
     t0 = MPI.Wtime()
@@ -219,7 +219,7 @@ def parallel_merge_algorithm(exp):
         return 0 if group == 0 else int(end_exclusive[group-1])
     
     # pre allocate local_C total size equal to local_A + local_B
-    local_C = np.empty(local_A.size + local_B.size, dtype=np.int32)
+    local_C = np.empty(local_A.size + local_B.size, dtype=np.int64)
     
     # offsets into local_A/local_B
     a_offset = 0
@@ -252,13 +252,13 @@ def parallel_merge_algorithm(exp):
         c_offset += out_len
         
     # gather results into C
-    c_counts = (a_counts + b_counts).astype(np.int32)
-    c_displacements = np.zeros(P, dtype=np.int32)
+    c_counts = (a_counts + b_counts).astype(np.int64)
+    c_displacements = np.zeros(P, dtype=np.int64)
     if P > 1: 
-        c_displacements[1:] = np.cumsum(c_counts[:-1], dtype = np.int64).astype(np.int32)
+        c_displacements[1:] = np.cumsum(c_counts[:-1], dtype = np.int64).astype(np.int64)
         
     if rank == FIRST:
-        C = np.empty(2*n, dtype=np.int32)
+        C = np.empty(2*n, dtype=np.int64)
     else:
         C = None
         
