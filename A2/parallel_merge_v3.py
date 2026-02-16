@@ -160,8 +160,8 @@ def parallel_merge_algorithm(exp):
     if rank == FIRST:
         A, B = generate_sorted_arrays(n)
         print("Generated A and B:")
-        print("A --> ", A)
-        print("B --> ", B)
+        print(f"A --> {A[:10]}...{A[-10:]}")
+        print(f"B --> {B[:10]}...{B[-10:]}")
 
         # keys are the last eleemnts of each A group: A[k-1], A[2k-1], ..., A[rk-1]
         keys = A[k - 1 :: k]  # length r
@@ -219,6 +219,9 @@ def parallel_merge_algorithm(exp):
         comm, B, b_counts, b_displacements, local_B, root=FIRST, tag=TAG_SEND_B
     )
 
+    # extremely high memory usage when we keep copies of a and b on rank 0
+    if rank == FIRST: del A, B
+
     # merge group by group
     group_start = int(group_displacements[rank])
     group_count = int(groups_per_rank[rank])
@@ -270,9 +273,10 @@ def parallel_merge_algorithm(exp):
     )
     t1 = MPI.Wtime()
     if rank == FIRST:
-        print("Time taken: {}".format(t1 - t0))
+        print("Time taken: {} seconds".format(t1 - t0))
         print("Check if C is sorted: {}".format(is_sorted(C)))
-        print(C)
+        print("Elements inside C:", C.size)
+        print(f"C --> {C[:10]}...{C[-10:]}")
 
 
 def is_sorted(array):
