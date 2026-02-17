@@ -4,6 +4,7 @@
 #SBATCH --time=12:00:00 # My job will take at most 5 hours to run, so find and reserve resources for 5 hours
 #SBATCH --job-name=parallel-merge # Name of my job
 #SBATCH --output=parallel-merge%j.txt # Write the output to parallel-merge<jobID>.txt
+#SBATCH --error=parallel-merge%j.err # Write stderr to parallel-merge<jobID>.err
 #SBATCH --mail-user=sekh4498@mylaurier.ca # Email me at this address if my job fails
 #SBATCH --mail-type=FAIL
 
