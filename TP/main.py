@@ -118,7 +118,7 @@ class Fractal:
     # Need conversion to plot escape information
     def convert_pixel_info_to_numpy(self) -> np.ndarray:
          if self.per_pixel_info == {}:
-              self.set_pixel_info
+              self.set_pixel_info()
          
          data = np.zeros((self.dimension, self.dimension))
          for (col, row) in self.per_pixel_info:
