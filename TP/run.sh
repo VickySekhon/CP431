@@ -11,7 +11,7 @@
 cd $SLURM_SUBMIT_DIR
 module restore TP_MODULES
 
-dimension_of_image=1000
+dimension_of_image=10000
 processor_count=80
 
 # Complex Numbers to use for the fractal generation
