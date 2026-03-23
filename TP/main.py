@@ -62,11 +62,11 @@ class SaveFigure:
         plt.savefig(self.full_path)
 
     def create_pixel_csv(
-        self, all_pixels: np.ndarray, c: complex, delimiter=","
+        self, all_pixels: np.ndarray, c: complex
     ) -> None:
         # Strip the brackets
         c = str(c)[1:-1]
-        np.savetxt(f"julia_{c}.npy", all_pixels, delimiter=delimiter)
+        np.save(f"julia_{c}.npy", all_pixels)
 
 
 class Fractal:
@@ -111,7 +111,7 @@ class Fractal:
 
     def compute_pixel_info(self, row_start, row_end) -> np.ndarray:
         n_W = row_end - row_start
-        data = np.zeros((n_W, self.dimension))
+        data = np.zeros((n_W, self.dimension), dtype=np.uint8)
         # Each process computes pixel info for a subset of rows
         for row in range(row_start, row_end):
             for col in range(self.dimension):
@@ -171,7 +171,7 @@ def main():
 
         comm.send(message, destination)
     else:
-        all_pixels = np.zeros((fractal.dimension, fractal.dimension))
+        all_pixels = np.zeros((fractal.dimension, fractal.dimension), dtype=np.uint8)
         for _ in range(1, P):
             message = comm.recv(source=MPI.ANY_SOURCE)
             subset, row_start, row_end = message
