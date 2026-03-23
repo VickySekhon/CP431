@@ -44,7 +44,6 @@ When you zoom: you are recomputing, not enlarging
 
 """
 
-
 class SaveFigure:
     def __init__(self, directory, file_name):
         self.directory = directory
@@ -68,7 +67,7 @@ class Fractal:
     ESCAPE_ITERATIONS = 50
 
     def __init__(self, dimension: int, c: complex):
-        self.per_pixel_info = {}  # Tracks bounded/unbounded behavior per pixel
+        self.per_pixel_info = None  # Tracks bounded/unbounded behavior per pixel
         self.dimension = dimension
         self.c = c
 
@@ -102,31 +101,18 @@ class Fractal:
         # Pixel remained within radius (part of the Julia Set)
         return escape_iterations
 
-    def compute_pixel_info(self, row_start, row_end) -> dict[tuple, int]:
-        per_pixel_info = {}
+    def compute_pixel_info(self, row_start, row_end) -> np.ndarray:
+        n_W = row_end - row_start
+        data = np.zeros((n_W, self.dimension))
         # Each process computes pixel info for a subset of rows
         for row in range(row_start, row_end):
             for col in range(self.dimension):
                 pixel = (col, row)
-                escape_iteration = self.test_if_pixel_bounded(pixel)
-                per_pixel_info[pixel] = escape_iteration
-        return per_pixel_info
+                data[row - row_start, col] = self.test_if_pixel_bounded(pixel)
+        return data
 
     def set_pixel_info(self, row_start, row_end) -> None:
         self.per_pixel_info = self.compute_pixel_info(row_start, row_end)
-
-    # Need conversion to plot escape information
-    def convert_pixel_info_to_numpy(self, n_W, row_start) -> np.ndarray:
-        assert (
-            len(self.per_pixel_info) > 0
-        ), "per_pixel_info is empty cannot convert it to numPy"
-        # Only need a subset of rows per processor
-        pixel_info = np.zeros((n_W, self.dimension))
-        for col, row in self.per_pixel_info:
-            value = self.per_pixel_info[(col, row)]
-            local_row = row - row_start
-            pixel_info[local_row, col] = value
-        return pixel_info
 
 
 def main():
@@ -172,7 +158,7 @@ def main():
 
         row_start, row_end = i_start_rank, i_start_rank + n_W
         fractal.set_pixel_info(row_start, row_end)
-        subset = fractal.convert_pixel_info_to_numpy(n_W, row_start)
+        subset = fractal.per_pixel_info
         message = (subset, row_start, row_end)
 
         comm.send(message, destination)
