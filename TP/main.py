@@ -59,9 +59,14 @@ class SaveFigure:
         plt.imshow(data, cmap="Reds")
         plt.colorbar(label="Intensity")
         plt.savefig(self.full_path)
-
+      
+    def create_pixel_csv(self, all_pixels: np.ndarray, c: complex, delimiter=",") -> None:
+        # Strip the brackets
+        c = str(c)[1:-1]
+        np.savetxt(f"julia_{c}.csv", all_pixels, delimiter=delimiter)
 
 class Fractal:
+  
     CIRCLE_LOWER_BOUND = -2
     CIRCLE_UPPER_BOUND = 2
     ESCAPE_ITERATIONS = 50
@@ -170,8 +175,9 @@ def main():
 
             all_pixels[row_start:row_end, :] = subset
         # print(f"Computed fractal (pixel representation): {all_pixels}")
-
-        figure = SaveFigure(os.path.join(os.curdir, "plots"), "heatmap.png")
+        
+        figure = SaveFigure(os.path.join(os.curdir, "plots"), f"julia_{str(c)[1:-1]}.png")
+        figure.create_pixel_csv(all_pixels, c)
         figure.create_heatmap(all_pixels)
 
 
