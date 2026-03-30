@@ -183,8 +183,28 @@ def main():
             os.path.join(os.curdir, "plots"), f"julia_{str(c)[1:-1]}.png"
         )
         figure.create_pixel_csv(all_pixels, c)
-        # figure.create_heatmap(all_pixels)
+        figure.create_heatmap(all_pixels)
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    print("hello")
+
+
+"""
+Julia Set is exported, now I need to render it with OpenGL
+
+first copy over the npy arrays from cluster to local using scp
+
+You'll need two libraries:
+pip install PyOpenGL PyOpenGL_accelerate Pillow numpy
+
+The Core Approach
+Load your .npy file, convert it to a texture, and render it on a flat quad that fills the screen. The steps are:
+
+Load the data: np.load("julia.npy")
+Normalize to 0–255: scale escape counts to full color range
+Apply a colormap: map the grayscale values to RGB colors
+Upload as an OpenGL texture: glTexImage2D
+Render a fullscreen quad: two triangles that fill the window
+"""
