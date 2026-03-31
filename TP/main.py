@@ -130,69 +130,19 @@ class Fractal:
 
     def set_pixel_info(self, row_start, row_end) -> None:
         self.per_pixel_info = self.compute_pixel_info(row_start, row_end)
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Generate a Julia Set for a given constant 'c' and some dimension 'dim'"
-        )
-    )
-
-    parser.add_argument(
-        "c",
-        type=complex,
-        help="Some complex number 'c' that follows the format (a, b) which is the same as 'a + bi'",
-    )
-    parser.add_argument(
-        "dim",
-        type=int,
-        help="Dimensions of the image Julia Set to generate (e.g. dim=600 will use 600x600 pixels)",
-    )
-
-    args = parser.parse_args()
-    c = args.c
-    n = args.dim
-
-    fractal = Fractal(n, c)
-
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    P = comm.Get_size()
-    # Rank 0 is reserved for collection
-    # Leaves us with Ranks 1 to P-1 which are workers
-    # These are pseudo ranks, underlying ranks are still needed for process identification
-    W = P - 1
-
-    if rank != 0:
-        destination = 0
-        # Start at w_rank 0 otherwise we'll skip rows
-        w_rank = rank - 1
-        n_W = math.floor(n / W)
-        if w_rank < (n % W):
-            n_W += 1
-        i_start_rank = w_rank * math.floor(n / W) + min(w_rank, (n % W))
-
-        row_start, row_end = i_start_rank, i_start_rank + n_W
-        fractal.set_pixel_info(row_start, row_end)
-        subset = fractal.per_pixel_info
-        message = (subset, row_start, row_end)
-
-        comm.send(message, destination)
-    else:
-        all_pixels = np.zeros((fractal.dimension, fractal.dimension), dtype=np.uint8)
-        for _ in range(1, P):
-            message = comm.recv(source=MPI.ANY_SOURCE)
-            subset, row_start, row_end = message
-
-            all_pixels[row_start:row_end, :] = subset
-        # print(f"Computed fractal (pixel representation): {all_pixels}")
-
-        figure = SaveFigure(
-            os.path.join(os.curdir, "plots"), f"julia_{str(c)[1:-1]}.png"
-        )
-        figure.create_pixel_csv(all_pixels, c)
-        figure.create_heatmap(all_pixels)
+        
+    def compute_pixel_info_vectorized(self):
+        cols, rows = np.meshgrid(np.arange(self.dimension), np.arange(self.dimension))
+        x = self.x_min + cols * self._step_x
+        y = self.y_min + rows * self._step_y
+        z = x + 1j * y
+        escape = np.full(z.shape, self.ESCAPE_ITERATIONS, dtype=np.uint8)
+        for idx in range(self.ESCAPE_ITERATIONS):
+            mask = np.abs(z) <= 2
+            z[mask] = z[mask]**2 + self.c
+            escape[mask & (np.abs(z) > 2)] = idx
+        self.per_pixel_info = escape
+        #return escape
 
 class Renderer:
     RGB_RANGE = 255
@@ -262,23 +212,47 @@ class Renderer:
         # Colormap returns a 3D array and we truncate RGBA to RGB
         return colors[:, :, :3]
     
-    def recompute(self, fractal: Fractal):
-        # TODO: pixel info takes a row start and row end for parallelization but here we uses the dimension itself so one worker processes all the rows?
-        pixel_info = fractal.compute_pixel_info(0, fractal.dimension)
-        pixel_info_norm = self.normalize_pixel_values(pixel_info)
+    def recompute(self, fractal: Fractal, row_start=0, row_end=500):
+        fractal.compute_pixel_info_vectorized()
+        pixel_info_norm = self.normalize_pixel_values(fractal.per_pixel_info)
         self.set_pixel_map(pixel_info_norm)
         self.create_texture()
     
     def set_pixel_map(self, pixel_map: np.ndarray):
         self.pixel_map = pixel_map
 
-if __name__ == "__main__":
-    # main()
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Generate a Julia Set for a given constant 'c' and some dimension 'dim'"
+        )
+    )
+
+    parser.add_argument(
+        "c",
+        type=complex,
+        help="Some complex number 'c' that follows the format (a, b) which is the same as 'a + bi'",
+    )
+    parser.add_argument(
+        "dim",
+        type=int,
+        help="Dimensions of the image Julia Set to generate (e.g. dim=600 will use 600x600 pixels)",
+    )
+
+    args = parser.parse_args()
+    c = args.c
+    n = args.dim
+    #fractal = Fractal(n, c)
+
+    # We have a 30,000 x 30,000 pixel map, that needs to be converted to dimension of 'n'
+    #downsample = int((30_000 * 30_000) / (n*n))
+    downsample = 4
+    
     pg.init()
     pg.display.set_mode((900, 900), DOUBLEBUF | OPENGL)
     
     renderer = Renderer()
-    renderer.load_pixel_map("./julia-sets/julia_-0.1+0.8j.npy", 4)
+    renderer.load_pixel_map("./julia-sets/julia_-0.1+0.8j.npy", downsample)
     renderer.create_texture()
     
     x_min, x_max = -2.0, 2.0
@@ -286,8 +260,8 @@ if __name__ == "__main__":
     ZOOM_IN = 0.5     # shrink window
     ZOOM_OUT = 2      # expand window
     running = True
-    c = complex(-0.1, 0.8)
-    mouse_x, mouse_y = 0,0
+    # c = complex(-0.1, 0.8)
+    mouse_x, mouse_y = 0, 0
     
     while running:
         curr_x, curr_y = pg.mouse.get_pos()
@@ -301,8 +275,10 @@ if __name__ == "__main__":
             elif event.type == pg.MOUSEWHEEL:
                 if event.y > 0:
                     zoom_factor = ZOOM_IN
+                    n = min(n + 100, 1500)
                 elif event.y < 0:
                     zoom_factor = ZOOM_OUT
+                    n = max(n - 100, 500)
                 
                 mouse_x, mouse_y = pg.mouse.get_pos()
                 size_width, size_height = pg.display.get_surface().get_size()
@@ -319,12 +295,15 @@ if __name__ == "__main__":
                 x_min, x_max = complex_x - width/2, complex_x + width/2
                 y_min, y_max = complex_y - height/2, complex_y + height/2
                 
-                fractal = Fractal(1000, c, x_min, x_max, y_min, y_max)
+                fractal = Fractal(n, c, x_min, x_max, y_min, y_max)
                 renderer.recompute(fractal)
         renderer.draw_fractal()
         pg.display.flip()
-    
     pg.quit()
+
+
+if __name__ == "__main__":
+    main()
         
     
 
