@@ -215,11 +215,11 @@ class Renderer:
         params = {
             "target": GL_TEXTURE_2D,
             "level": 0,
-            "internalformat": GL_RED,
+            "internalformat": GL_LUMINANCE,
             "width": w,
             "height": h,
             "border": 0,
-            "format": GL_RED,
+            "format": GL_LUMINANCE,
             "type": GL_UNSIGNED_BYTE,
             "data": self.pixel_map,
         }
@@ -233,9 +233,9 @@ class Renderer:
         
         glBegin(GL_QUADS)
         glTexCoord2f(0,0); glVertex2f(-1,-1)
-        glTexCoord2f(0,1); glVertex2f(-1,1)
         glTexCoord2f(1,0); glVertex2f(1,-1)
         glTexCoord2f(1,1); glVertex2f(1,1)
+        glTexCoord2f(0,1); glVertex2f(-1,1)
         glEnd()
         
         glDisable(GL_TEXTURE_2D)
@@ -262,6 +262,7 @@ if __name__ == "__main__":
             if event.type == pg.QUIT:
                 running = False
         renderer.draw_fractal()
+        pg.display.flip()
     
     pg.quit()
         
