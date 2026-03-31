@@ -1,4 +1,7 @@
 from mpi4py import MPI
+from OpenGL.GL import *
+import pygame as pg
+from pygame.locals import *
 import matplotlib.pyplot as plt
 import numpy as np
 import os, argparse, math
@@ -75,7 +78,8 @@ class Fractal:
     ESCAPE_ITERATIONS = 50
 
     def __init__(self, dimension: int, c: complex):
-        self.per_pixel_info = None  # Tracks bounded/unbounded behavior per pixel
+        # Tracks iteration pixels escaped circle bounded at origin of complex plane
+        self.per_pixel_info = None
         self.dimension = dimension
         self.c = c
 
@@ -185,10 +189,83 @@ def main():
         figure.create_pixel_csv(all_pixels, c)
         figure.create_heatmap(all_pixels)
 
+class Renderer:
+    def __init__(self):
+        self.pixel_map = None
+        self.texture_id = None
+    
+    def load_pixel_map(self, npy_file_path):
+        pixel_map = np.load(npy_file_path)
+        normalized_pixel_map = self.normalize_pixel_values(pixel_map)
+        self.set_pixel_map(normalized_pixel_map)
+        return pixel_map
+    
+    def create_texture(self):
+        assert self.pixel_map is not None, "Pixel map is empty, cannot create a texture"
+        
+        h, w = self.pixel_map.shape
+        texture_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, texture_id)
+        
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        
+        params = {
+            "target": GL_TEXTURE_2D,
+            "level": 0,
+            "internalformat": GL_RED,
+            "width": w,
+            "height": h,
+            "border": 0,
+            "format": GL_RED,
+            "type": GL_UNSIGNED_BYTE,
+            "data": self.pixel_map,
+        }
+        glTexImage2D(**params)
+        self.texture_id = texture_id
+    
+    def draw_fractal(self):
+        glClear(GL_COLOR_BUFFER_BIT)
+        glEnable(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, self.texture_id)
+        
+        glBegin(GL_QUADS)
+        glTexCoord2f(0,0); glVertex2f(-1,-1)
+        glTexCoord2f(0,1); glVertex2f(-1,1)
+        glTexCoord2f(1,0); glVertex2f(1,-1)
+        glTexCoord2f(1,1); glVertex2f(1,1)
+        glEnd()
+        
+        glDisable(GL_TEXTURE_2D)
+    
+    # Scale escape counts to full RGB range
+    def normalize_pixel_values(self, pixel_map):
+        return (pixel_map / 50 * 255).astype(np.uint8)
+    
+    def set_pixel_map(self, pixel_map):
+        self.pixel_map = pixel_map
 
 if __name__ == "__main__":
     # main()
-    print("hello")
+    pg.init()
+    pg.display.set_mode((900, 900), DOUBLEBUF | OPENGL)
+    
+    renderer = Renderer()
+    renderer.load_pixel_map("./julia-sets/julia_-0.1+0.8j.npy")
+    renderer.create_texture()
+    
+    running = True
+    while running:
+        for event in pg.event.get():
+            if event.type == pg.QUIT:
+                running = False
+        renderer.draw_fractal()
+    
+    pg.quit()
+        
+    
 
 
 """
