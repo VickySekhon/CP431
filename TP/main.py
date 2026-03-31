@@ -3,6 +3,7 @@ from OpenGL.GL import *
 import pygame as pg
 from pygame.locals import *
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import numpy as np
 import os, argparse, math
 
@@ -190,20 +191,28 @@ def main():
         figure.create_heatmap(all_pixels)
 
 class Renderer:
+    RGB_RANGE = 255
+    
     def __init__(self):
         self.pixel_map = None
         self.texture_id = None
     
-    def load_pixel_map(self, npy_file_path):
-        pixel_map = np.load(npy_file_path)
-        normalized_pixel_map = self.normalize_pixel_values(pixel_map)
-        self.set_pixel_map(normalized_pixel_map)
-        return pixel_map
+    def _reduce_2d_array_by_factor(self, array, factor):
+        return array[::factor, ::factor]
     
+    def load_pixel_map(self, npy_file_path, downsample=1):
+        pixel_map = np.load(npy_file_path)
+        if downsample > 1:
+            # Cannot run huge dimensions locally
+            pixel_map = self._reduce_2d_array_by_factor(pixel_map, downsample)
+        print(pixel_map)
+        normalized = self.normalize_pixel_values(pixel_map)
+        self.set_pixel_map(normalized)
+        
     def create_texture(self):
         assert self.pixel_map is not None, "Pixel map is empty, cannot create a texture"
         
-        h, w = self.pixel_map.shape
+        h, w, _ = self.pixel_map.shape
         texture_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, texture_id)
         
@@ -212,37 +221,48 @@ class Renderer:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
         
-        params = {
-            "target": GL_TEXTURE_2D,
-            "level": 0,
-            "internalformat": GL_LUMINANCE,
-            "width": w,
-            "height": h,
-            "border": 0,
-            "format": GL_LUMINANCE,
-            "type": GL_UNSIGNED_BYTE,
-            "data": self.pixel_map,
-        }
-        glTexImage2D(**params)
+        glTexImage2D(
+            GL_TEXTURE_2D,      # target
+            0,                  # level
+            GL_RGB,             # internalformat
+            w,                  # width
+            h,                  # height
+            0,                  # border
+            GL_RGB,             # format
+            GL_UNSIGNED_BYTE,   # type
+            self.pixel_map      # data
+        )
         self.texture_id = texture_id
     
-    def draw_fractal(self):
+    def draw_fractal(self, zoom, offset_x, offset_y):
         glClear(GL_COLOR_BUFFER_BIT)
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
         
+        # Adjust tex coords based on zoom/pan
+        s0 = 0.5 - 0.5/zoom + offset_x
+        s1 = 0.5 + 0.5/zoom + offset_x
+        t0 = 0.5 - 0.5/zoom + offset_y
+        t1 = 0.5 + 0.5/zoom + offset_y
+
         glBegin(GL_QUADS)
-        glTexCoord2f(0,0); glVertex2f(-1,-1)
-        glTexCoord2f(1,0); glVertex2f(1,-1)
-        glTexCoord2f(1,1); glVertex2f(1,1)
-        glTexCoord2f(0,1); glVertex2f(-1,1)
+        glTexCoord2f(s0, t0); glVertex2f(-1, -1)
+        glTexCoord2f(s1, t0); glVertex2f( 1, -1)
+        glTexCoord2f(s1, t1); glVertex2f( 1,  1)
+        glTexCoord2f(s0, t1); glVertex2f(-1,  1)
         glEnd()
         
         glDisable(GL_TEXTURE_2D)
     
     # Scale escape counts to full RGB range
     def normalize_pixel_values(self, pixel_map):
-        return (pixel_map / 50 * 255).astype(np.uint8)
+        normalized = pixel_map / Fractal.ESCAPE_ITERATIONS
+        # Apply a colormap based on escape counts
+        # Each pixel value will be converted to RGBA 
+        # (e.g. [0.43..] -> [9.74638e-01, 7.97692e-01, 2.06332e-01, 1.00000e+00])
+        colors = (cm.inferno(normalized) * self.RGB_RANGE).astype(np.uint8)
+        # Colormap returns a 3D array and we truncate RGBA to RGB
+        return colors[:, :, :3]
     
     def set_pixel_map(self, pixel_map):
         self.pixel_map = pixel_map
@@ -250,18 +270,22 @@ class Renderer:
 if __name__ == "__main__":
     # main()
     pg.init()
-    pg.display.set_mode((900, 900), DOUBLEBUF | OPENGL)
+    pg.display.set_mode((1920, 1080), DOUBLEBUF | OPENGL)
     
     renderer = Renderer()
-    renderer.load_pixel_map("./julia-sets/julia_-0.1+0.8j.npy")
+    renderer.load_pixel_map("./julia-sets/julia_-0.1+0.8j.npy", 4)
     renderer.create_texture()
     
+    zoom = 1.0
+    offset_x, offset_y = 0.0, 0.0
     running = True
     while running:
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 running = False
-        renderer.draw_fractal()
+            elif event.type == pg.MOUSEWHEEL:
+                zoom *= 1.1 if event.y > 0 else 0.9
+        renderer.draw_fractal(zoom, offset_x, offset_y)
         pg.display.flip()
     
     pg.quit()

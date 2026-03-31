@@ -6,9 +6,11 @@ kiwisolver==1.5.0
 matplotlib==3.10.8
 mpi4py==4.1.1
 numpy==2.4.3
-openmpi==5.0.9
 packaging==26.0
 pillow==12.1.1
+pygame==2.6.1
+PyOpenGL==3.1.10
+PyOpenGL-accelerate==3.1.10
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
 six==1.17.0
