@@ -78,22 +78,26 @@ class Fractal:
     CIRCLE_UPPER_BOUND = 2
     ESCAPE_ITERATIONS = 50
 
-    def __init__(self, dimension: int, c: complex):
+    def __init__(self, dimension: int, c: complex, x_min, x_max, y_min, y_max):
         # Tracks iteration pixels escaped circle bounded at origin of complex plane
         self.per_pixel_info = None
         self.dimension = dimension
-        self.c = c
-
         self.pixels = dimension * dimension
-        self._step_size = (
-            self.CIRCLE_UPPER_BOUND - self.CIRCLE_LOWER_BOUND
-        ) / dimension
+        self.c = c
+        
+        self.x_min = x_min
+        self.x_max = x_max
+        self.y_min = y_min
+        self.y_max = y_max
+
+        self._step_x =  (x_max - x_min) / dimension
+        self._step_y =  (y_max - y_min) / dimension
 
     # Changes as we iterate
     def calculate_z_value_from_pixel_coordinates(self, pixel: tuple[int]) -> complex:
-        i, j = pixel
-        x = self.CIRCLE_LOWER_BOUND + i * self._step_size
-        y = self.CIRCLE_LOWER_BOUND + j * self._step_size
+        col, row = pixel
+        x = self.x_min + col * self._step_x
+        y = self.y_min + row * self._step_y
         z = complex(x, y)
         return z
 
@@ -234,24 +238,18 @@ class Renderer:
         )
         self.texture_id = texture_id
     
-    def draw_fractal(self, zoom: float, offset_x: float, offset_y: float):
+    def draw_fractal(self):
         glClear(GL_COLOR_BUFFER_BIT)
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
-        
-        # Adjust tex coords based on zoom/pan
-        s0 = 0.5 - 0.5/zoom + offset_x
-        s1 = 0.5 + 0.5/zoom + offset_x
-        t0 = 0.5 - 0.5/zoom + offset_y
-        t1 = 0.5 + 0.5/zoom + offset_y
 
         glBegin(GL_QUADS)
-        glTexCoord2f(s0, t0); glVertex2f(-1, -1)
-        glTexCoord2f(s1, t0); glVertex2f( 1, -1)
-        glTexCoord2f(s1, t1); glVertex2f( 1,  1)
-        glTexCoord2f(s0, t1); glVertex2f(-1,  1)
+        glTexCoord2f(0.0, 0.0); glVertex2f(-1, -1)
+        glTexCoord2f(1.0, 0.0); glVertex2f( 1, -1)
+        glTexCoord2f(1.0, 1.0); glVertex2f( 1,  1)
+        glTexCoord2f(0.0, 1.0); glVertex2f(-1,  1)
         glEnd()
-        
+
         glDisable(GL_TEXTURE_2D)
     
     # Scale escape counts to full RGB range
@@ -264,28 +262,66 @@ class Renderer:
         # Colormap returns a 3D array and we truncate RGBA to RGB
         return colors[:, :, :3]
     
+    def recompute(self, fractal: Fractal):
+        # TODO: pixel info takes a row start and row end for parallelization but here we uses the dimension itself so one worker processes all the rows?
+        pixel_info = fractal.compute_pixel_info(0, fractal.dimension)
+        pixel_info_norm = self.normalize_pixel_values(pixel_info)
+        self.set_pixel_map(pixel_info_norm)
+        self.create_texture()
+    
     def set_pixel_map(self, pixel_map: np.ndarray):
         self.pixel_map = pixel_map
 
 if __name__ == "__main__":
     # main()
     pg.init()
-    pg.display.set_mode((1920, 1080), DOUBLEBUF | OPENGL)
+    pg.display.set_mode((900, 900), DOUBLEBUF | OPENGL)
     
     renderer = Renderer()
     renderer.load_pixel_map("./julia-sets/julia_-0.1+0.8j.npy", 4)
     renderer.create_texture()
     
-    zoom = 1.0
-    offset_x, offset_y = 0.0, 0.0
+    x_min, x_max = -2.0, 2.0
+    y_min, y_max = -2.0, 2.0
+    ZOOM_IN = 0.5     # shrink window
+    ZOOM_OUT = 2      # expand window
     running = True
+    c = complex(-0.1, 0.8)
+    mouse_x, mouse_y = 0,0
+    
     while running:
+        curr_x, curr_y = pg.mouse.get_pos()
+        if curr_x != mouse_x or curr_y != mouse_y:
+            mouse_x = curr_x
+            mouse_y = curr_y
+            print(f"current position, x: {mouse_x}, y: {mouse_y}")                
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 running = False
             elif event.type == pg.MOUSEWHEEL:
-                zoom *= 1.1 if event.y > 0 else 0.9
-        renderer.draw_fractal(zoom, offset_x, offset_y)
+                if event.y > 0:
+                    zoom_factor = ZOOM_IN
+                elif event.y < 0:
+                    zoom_factor = ZOOM_OUT
+                
+                mouse_x, mouse_y = pg.mouse.get_pos()
+                size_width, size_height = pg.display.get_surface().get_size()
+                print(f"current size: {pg.display.get_surface().get_size()}")
+                # 0-1
+                norm_x = mouse_x / size_width
+                norm_y = 1.0 - (mouse_y / size_height)
+                
+                complex_x = x_min + norm_x * (x_max - x_min)
+                complex_y = y_min + norm_y * (y_max - y_min)
+                
+                width = (x_max - x_min) * zoom_factor
+                height = (y_max - y_min) * zoom_factor
+                x_min, x_max = complex_x - width/2, complex_x + width/2
+                y_min, y_max = complex_y - height/2, complex_y + height/2
+                
+                fractal = Fractal(1000, c, x_min, x_max, y_min, y_max)
+                renderer.recompute(fractal)
+        renderer.draw_fractal()
         pg.display.flip()
     
     pg.quit()
