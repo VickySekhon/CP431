@@ -197,10 +197,10 @@ class Renderer:
         self.pixel_map = None
         self.texture_id = None
     
-    def _reduce_2d_array_by_factor(self, array, factor):
+    def _reduce_2d_array_by_factor(self, array: np.ndarray, factor: int):
         return array[::factor, ::factor]
     
-    def load_pixel_map(self, npy_file_path, downsample=1):
+    def load_pixel_map(self, npy_file_path: str, downsample: int=1):
         pixel_map = np.load(npy_file_path)
         if downsample > 1:
             # Cannot run huge dimensions locally
@@ -234,7 +234,7 @@ class Renderer:
         )
         self.texture_id = texture_id
     
-    def draw_fractal(self, zoom, offset_x, offset_y):
+    def draw_fractal(self, zoom: float, offset_x: float, offset_y: float):
         glClear(GL_COLOR_BUFFER_BIT)
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, self.texture_id)
@@ -255,7 +255,7 @@ class Renderer:
         glDisable(GL_TEXTURE_2D)
     
     # Scale escape counts to full RGB range
-    def normalize_pixel_values(self, pixel_map):
+    def normalize_pixel_values(self, pixel_map: np.ndarray):
         normalized = pixel_map / Fractal.ESCAPE_ITERATIONS
         # Apply a colormap based on escape counts
         # Each pixel value will be converted to RGBA 
@@ -264,7 +264,7 @@ class Renderer:
         # Colormap returns a 3D array and we truncate RGBA to RGB
         return colors[:, :, :3]
     
-    def set_pixel_map(self, pixel_map):
+    def set_pixel_map(self, pixel_map: np.ndarray):
         self.pixel_map = pixel_map
 
 if __name__ == "__main__":
