@@ -287,7 +287,7 @@ def compute_fractal():
         i_start_rank = w_rank * math.floor(n / W) + min(w_rank, (n % W))
 
         row_start, row_end = i_start_rank, i_start_rank + n_W
-        fractal.set_pixel_info(row_start, row_end)
+        fractal.set_pixel_info_parallel(row_start, row_end)
         subset = fractal.per_pixel_info
         message = (subset, row_start, row_end)
 
@@ -337,7 +337,7 @@ def render_fractal():
     dimension = args.dim
 
     # When recomputing fractal, only process a max of 2,250,000 pixel updates opposed to hundreds of millions
-    DIMENSION_UPPER_LIMIT = 1500
+    DIMENSION_UPPER_LIMIT = 1200
     REDUCE_FACTOR = 4
     PYGAME_WINDOW_WIDTH, PYGAME_WINDOW_HEIGHT = 1000, 1000
 
